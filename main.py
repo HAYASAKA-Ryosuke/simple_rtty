@@ -64,11 +64,7 @@ def generate_rtty_signal(message: str, fs: int, baudrate: float=45.45, mark_freq
 
     signal = np.array([])
     for bit in bits:
-        if bit == 1:
-            freq = mark_freq
-        else:
-            freq = space_freq
-
+        freq = mark_freq if bit else space_freq
         t = np.linspace(0, t_bit, samples_per_bit, endpoint=False)
         sinewave = np.sin(2 * np.pi * freq * t)
         signal = np.concatenate((signal, sinewave))
