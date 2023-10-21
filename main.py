@@ -2,6 +2,37 @@ import numpy as np
 from typing import List
 from scipy.signal import hilbert
 
+BAUDOT_CODE = {
+    'LTRS': {
+        '00000': 'NUL',
+        '00001': 'E',
+        '00010': 'LF',
+        '00100': ' ',
+        '10111': 'Q',
+        '10011': 'W',
+        '01010': 'R',
+        '10000': 'T',
+        '10101': 'Y',
+        '00111': 'U',
+        '00110': 'I',
+        '11000': 'O',
+        '10110': 'P',
+        '00011': 'A',
+        # ...  # その他の文字
+        '11010': 'LTRS',  # 文字モードへの切り替え
+        '11011': 'FIGS',  # 数字・特殊文字モードへの切り替え
+    },
+    'FIGS': {
+        '00001': '3',
+        '00010': 'CR',
+        # ... その他の数字・特殊文字
+        '11010': 'LTRS',  # 文字モードへの切り替え
+        '11011': 'FIGS',  # 数字・特殊文字モードへの切り替え
+    }
+}
+
+MODE = 'LTRS'
+
 
 def instantaneous_frequency(signal: List, fs: int) -> List[float]:
     """
@@ -15,17 +46,12 @@ def instantaneous_frequency(signal: List, fs: int) -> List[float]:
 
 def convert_bits_to_string(bits: List[bool]) -> str:
     """
-    与えられたビット配列から文字列に変換
+    与えられた5ビット配列から文字列に変換
     """
-    byte_chunks = [bits[i:i+8] for i in range(0, len(bits), 8)]
-    # ビット列を文字に変換
+    print(bits)
     result = ''
-    for byte_chunk in byte_chunks:
-        # ビット配列を整数に変換(0b00101→5)
-        byte_val = sum([bit * (2**index) for index, bit in enumerate(byte_chunk[::-1])])
-        # 整数をASCII文字に変換
-        result += chr(byte_val)
-
+    for i in range(0, len(bits), 5):
+        result += BAUDOT_CODE[MODE][''.join(map(str, bits[i:i+5]))]
     return result
 
 
@@ -36,18 +62,35 @@ def decode_rtty(signal: List[float], fs: int, baudrate: float=45.45, mark_freq: 
     """
     # 瞬時周波数
     inst_freq = instantaneous_frequency(signal, fs)
+    plt.plot(inst_freq)
+    plt.show()
 
     # マークとスペースの中間の周波数を計算
     threshold_freq = (mark_freq + space_freq) / 2.0
 
-    # マークとスペースをTrue,Falseで表現
-    mark_space_bits = inst_freq <= threshold_freq
+    # マークとスペース
+    mark_space_bits = list(map(int, inst_freq <= threshold_freq))
 
     # 適切なサンプリング間隔で抽出
     samples_per_bit = int(fs / baudrate)
     offset = samples_per_bit // 2
-    decoded_bits = mark_space_bits[offset::samples_per_bit]
 
+    sampled_bits = mark_space_bits[offset::samples_per_bit]
+    print(sampled_bits)
+
+    # スタートビットとストップビットの検出
+    decoded_bits = []
+    is_start = False
+    i = 0
+    for bit in sampled_bits:
+        if is_start and len(sampled_bits) > i + 6:
+            if sampled_bits[i+6] and sampled_bits[i+5]:
+                decoded_bits.extend(sampled_bits[i:i+5])
+                i += 6
+            is_start = False
+        elif not bit and not is_start:
+            is_start = True
+        i += 1
     return convert_bits_to_string(decoded_bits)
 
 
@@ -59,26 +102,34 @@ def generate_rtty_signal(message: str, fs: int, baudrate: float=45.45, mark_freq
     t_bit = 1.0 / baudrate
     samples_per_bit = int(fs * t_bit)
 
-    # メッセージをビット配列に変換(Aなら0b01000001なので[0, 1, 0, 0, 0, 0, 0, 1]になる)
-    bits = [int(bit) for char in message for bit in format(ord(char), '08b')]
-
     signal = np.array([])
-    for bit in bits:
-        freq = mark_freq if bit else space_freq
+    BAUDOT_CODE_REVERSE = {v: k for k, v in BAUDOT_CODE[MODE].items()}
+    for char in message:
+        # スタートビットを追加
         t = np.linspace(0, t_bit, samples_per_bit, endpoint=False)
-        sinewave = np.sin(2 * np.pi * freq * t)
+        sinewave = np.sin(2 * np.pi * space_freq * t)
+        signal = np.concatenate((signal, sinewave))
+        bits = [int(bit) for bit in BAUDOT_CODE_REVERSE[char]]
+
+        for bit in bits:
+            freq = mark_freq if bit else space_freq
+            t = np.linspace(0, t_bit, samples_per_bit, endpoint=False)
+            sinewave = np.sin(2 * np.pi * freq * t)
+            signal = np.concatenate((signal, sinewave))
+
+        # ストップビットを追加
+        t = np.linspace(0, t_bit, samples_per_bit, endpoint=False)
+        sinewave = np.sin(2 * np.pi * mark_freq * t)
+        signal = np.concatenate((signal, sinewave))
         signal = np.concatenate((signal, sinewave))
 
     return signal
 
+# RTTY信号を生成
+message = "AI"
+fs = 8000
+signal = generate_rtty_signal(message, fs)
 
-if __name__ == '__main__':
-    # RTTY信号を生成
-    message = "Hello World!"
-    fs = 8000
-    signal = generate_rtty_signal(message, fs)
-    
-    # デコードして文字列を求める
-    decoded_message = decode_rtty(signal, fs)
-    print(decoded_message)
-
+# デコードして文字列を求める
+decoded_message = decode_rtty(signal, fs)
+print(decoded_message)
