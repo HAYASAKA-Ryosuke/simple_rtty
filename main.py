@@ -88,7 +88,6 @@ def convert_bits_to_string(bits: List[bool]) -> str:
     """
     与えられた5ビット配列から文字列に変換
     """
-    print(bits)
     result = ''
     for i in range(0, len(bits), 5):
         result += BAUDOT_CODE[MODE][''.join(map(str, bits[i:i+5]))]
@@ -102,8 +101,6 @@ def decode_rtty(signal: List[float], fs: int, baudrate: float=45.45, mark_freq: 
     """
     # 瞬時周波数
     inst_freq = instantaneous_frequency(signal, fs)
-    plt.plot(inst_freq)
-    plt.show()
 
     # マークとスペースの中間の周波数を計算
     threshold_freq = (mark_freq + space_freq) / 2.0
@@ -116,7 +113,6 @@ def decode_rtty(signal: List[float], fs: int, baudrate: float=45.45, mark_freq: 
     offset = samples_per_bit // 2
 
     sampled_bits = mark_space_bits[offset::samples_per_bit]
-    print(sampled_bits)
 
     # スタートビットとストップビットの検出
     decoded_bits = []
