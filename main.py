@@ -118,13 +118,15 @@ def decode_rtty(signal: List[float], fs: int, baudrate: float=45.45, mark_freq: 
     decoded_bits = []
     is_start = False
     i = 0
-    for bit in sampled_bits:
-        if is_start and len(sampled_bits) > i + 6:
+    for _ in range(len(sampled_bits)):
+        if len(sampled_bits) <= i:
+            break
+        if is_start and len(sampled_bits) >= i + 6:
             if sampled_bits[i+6] and sampled_bits[i+5]:
                 decoded_bits.extend(sampled_bits[i:i+5])
                 i += 6
             is_start = False
-        elif not bit and not is_start:
+        elif not sampled_bits[i] and not is_start:
             is_start = True
         i += 1
     return convert_bits_to_string(decoded_bits)
@@ -162,7 +164,7 @@ def generate_rtty_signal(message: str, fs: int, baudrate: float=45.45, mark_freq
     return signal
 
 # RTTY信号を生成
-message = "AI"
+message = "HELLO WORLD"
 fs = 8000
 signal = generate_rtty_signal(message, fs)
 
